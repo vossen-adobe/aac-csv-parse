@@ -10,6 +10,7 @@ class Category():
     def __init__(self, name, members):
         self.name = name
         self.members = members
+        self.initial_count = self.size()
 
     def pull_next(self):
         keys = list(self.members.keys())
@@ -151,20 +152,22 @@ def write_to_csv(cats, data_filename):
                 break
             writer.writerow(row)
 
-    return cols_ann
-
-
-def write_summary(summary_filename, category_counts, total_users, outfile, sourcefile, category):
+def write_summary(summary_filename, total_users, outfile, sourcefile, category, sorted_dict):
+    non_cat = 'no {}'.format(category)
     with open(summary_filename, 'w') as f:
         f.write('Completed on: {}\n'.format(datetime.now().isoformat().replace('T', ' ')))
         f.write('Parsed CSV: {}\n'.format(sourcefile))
-        f.write('Sort category: {}'.format(category))
+        f.write('Sort category: {}\n'.format(category))
         f.write('Wrote full data to: {}\n'.format(outfile))
         f.write('Total users: {}\n'.format(total_users))
-        f.write('\nPer category counts: \n')
+        f.write('Total users in {0}: {1}\n'.format(category, total_users - sorted_dict[non_cat].initial_count))
+        f.write('Total without any {0}: {1}\n'.format(category, sorted_dict[non_cat].initial_count))
+        f.write('\nPer {} counts: \n'.format(category))
         f.write('-----------------------------------------\n')
-        for r in category_counts:
-            f.write(r + '\n')
+        f.write('# Users \t\t Name\n')
+        f.write('-----------------------------------------\n')
+        for r, v in sorted_dict.items():
+            f.write('{:<8}{}\n'.format(v.initial_count, r))
         f.write('-----------------------------------------\n')
 
 
@@ -204,10 +207,10 @@ def sort(path, category):
     sorted = build_sorted_list(category, users)
 
     print('Write results to {}'.format(data_output))
-    summary = write_to_csv(sorted, data_output)
+    write_to_csv(sorted, data_output)
 
     print('Write summary to {}'.format(summary_output))
-    write_summary(summary_output, summary, len(users), data_output, path, category)
+    write_summary(summary_output, len(users), data_output, path, category, sorted)
     print('-----------------------------------------')
 
 
