@@ -3,8 +3,8 @@ import os
 from datetime import datetime
 
 import click
+import questionary
 from click_default_group import DefaultGroup
-
 
 class Category():
     def __init__(self, name, members):
@@ -26,9 +26,9 @@ class Category():
 
 class User():
     sortable_fields = [
-        'product_profs',
+        'product_profiles',
         'admin_roles',
-        'products_profs_administered',
+        'products_profiles_administered',
         'groups',
         'groups_administered',
         'products_administered',
@@ -44,9 +44,9 @@ class User():
                  givenname=None,
                  surname=None,
                  country=None,
-                 product_profs=None,
+                 product_profiles=None,
                  admin_roles=None,
-                 products_profs_administered=None,
+                 product_profiles_administered=None,
                  groups=None,
                  groups_administered=None,
                  products_administered=None,
@@ -59,9 +59,9 @@ class User():
         self.givenname = self.lower(givenname)
         self.surname = self.lower(surname)
         self.country = self.lower(country)
-        self.product_profs = self.get_set(product_profs)
+        self.product_profs = self.get_set(product_profiles)
         self.admin_roles = self.get_set(admin_roles)
-        self.products_profs_administered = self.get_set(products_profs_administered)
+        self.products_profs_administered = self.get_set(product_profiles_administered)
         self.groups = self.get_set(groups)
         self.groups_administered = self.get_set(groups_administered)
         self.products_administered = self.get_set(products_administered)
@@ -103,8 +103,12 @@ class User():
 def read_users(filename):
     users = {}
     with open(filename) as f:
-        for u in csv.DictReader(f):
-            u = User.fromCSV(u)
+        for ud in csv.DictReader(f):
+            try:
+                u = User.fromCSV(ud)
+            except ValueError:
+                print('Error reading user - skipping.  Details: {}'.format(ud))
+                continue
             if u.type != 'federated id':
                 u.email = "{0} ({1})".format(u.email, u.type)
             users[u.email] = u
@@ -155,7 +159,9 @@ def write_to_csv(cats, data_filename):
 def write_summary(summary_filename, total_users, outfile, sourcefile, category, sorted_dict):
     non_cat = 'no {}'.format(category)
     with open(summary_filename, 'w') as f:
-        f.write('Completed on: {}\n'.format(datetime.now().isoformat().replace('T', ' ')))
+        f.write('CSV analysis results:\n')
+        f.write('-----------------------------------------\n')
+        f.write('Completed on: {}\n'.format(datetime.now().strftime('%Y-%m-%d %H.%M.%S')))
         f.write('Parsed CSV: {}\n'.format(sourcefile))
         f.write('Sort category: {}\n'.format(category))
         f.write('Wrote full data to: {}\n'.format(outfile))
@@ -164,10 +170,10 @@ def write_summary(summary_filename, total_users, outfile, sourcefile, category, 
         f.write('Total without any {0}: {1}\n'.format(category, sorted_dict[non_cat].initial_count))
         f.write('\nPer {} counts: \n'.format(category))
         f.write('-----------------------------------------\n')
-        f.write('# Users \t\t Name\n')
+        f.write('# Users | Name\n')
         f.write('-----------------------------------------\n')
         for r, v in sorted_dict.items():
-            f.write('{:<8}{}\n'.format(v.initial_count, r))
+            f.write('{:<10}{}\n'.format(v.initial_count, r))
         f.write('-----------------------------------------\n')
 
 
@@ -177,14 +183,27 @@ def main():
     pass
 
 
+
+class QuestionaryOption(click.Option):
+
+    def __init__(self, param_decls=None, **attrs):
+        click.Option.__init__(self, param_decls, **attrs)
+        if not isinstance(self.type, click.Choice):
+            raise Exception('ChoiceOption type arg must be click.Choice')
+
+    def prompt_for_value(self, ctx):
+        val = questionary.select(self.prompt, choices=self.type.choices, default='groups').unsafe_ask()
+        return val
+
 @main.command(help='')
 @click.option('-p', '--path',
               default=None,
               show_default=True,
               type=click.Path(exists=True))
 @click.option('-c', '--category',
+              prompt='Sort by which category: ',
               default='groups',
-              type=click.Choice(User.sortable_fields, case_sensitive=False))
+              type=click.Choice(User.sortable_fields, case_sensitive=False), cls=QuestionaryOption)
 def sort(path, category):
     if path is None:
         path = click.prompt('Target CSV file',
@@ -195,8 +214,8 @@ def sort(path, category):
     filename = path.split(os.sep)[-1]
     path = os.path.abspath(path)
     dir = os.path.dirname(path)
-    data_output = os.path.join(dir, 'processed_{}'.format(filename))
-    summary_output = os.path.join(dir, 'summary_{}'.format(filename))
+    data_output = os.path.join(dir, 'processed_{0}_{1}'.format(category, filename))
+    summary_output = os.path.join(dir, 'summary_{0}_{1}'.format(category, filename))
     category = category.lower()
 
     print('Reading users: {}'.format(path))
@@ -206,7 +225,7 @@ def sort(path, category):
     print("Assemble sorted dictionary by '{}'...".format(category))
     sorted = build_sorted_list(category, users)
 
-    print('Write results to {}'.format(data_output))
+    print('Process results to {}'.format(data_output))
     write_to_csv(sorted, data_output)
 
     print('Write summary to {}'.format(summary_output))
