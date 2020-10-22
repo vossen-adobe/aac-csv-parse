@@ -3,7 +3,7 @@ import os
 import time
 from datetime import datetime
 from stat import S_ISREG, ST_CTIME, ST_MODE
-
+from aac_csv_parse.version import __version__
 import click
 import questionary
 from click_default_group import DefaultGroup
@@ -202,6 +202,7 @@ def find_recent_csv():
 @click.group(cls=DefaultGroup, default='sort', default_if_no_args=True)
 @click.help_option('-h', '--help')
 def main():
+    print(welcome())
     pass
 
 class QuestionaryOption(click.Option):
@@ -226,17 +227,17 @@ class QuestionaryOption(click.Option):
               type=click.Choice(User.sortable_fields, case_sensitive=False), cls=QuestionaryOption)
 def sort(path, category):
     if path is None:
-
         path = click.prompt('Target CSV file',
                             default=find_recent_csv(),
                             show_default=True,
                             type=click.Path(exists=True))
 
     filename = path.split(os.sep)[-1]
+    nontyped = '.'.join(filename.split('.')[0:-1])
     path = os.path.abspath(path)
     dir = os.path.dirname(path)
-    data_output = os.path.join(dir, 'processed_{0}_{1}'.format(category, filename))
-    summary_output = os.path.join(dir, 'summary_{0}_{1}'.format(category, filename))
+    data_output = os.path.join(dir, 'processed_{0}_{1}.csv'.format(category, nontyped))
+    summary_output = os.path.join(dir, 'summary_{0}_{1}.txt'.format(category, nontyped))
     category = category.lower()
 
     print('Reading users: {}'.format(path))
@@ -253,6 +254,25 @@ def sort(path, category):
     write_summary(summary_output, len(users), data_output, path, category, sorted)
     print('-----------------------------------------')
 
+    input('Press enter to exit...')
+
+def welcome():
+
+    banner = """
+ $$$$$$\        $$\           $$\\
+$$  __$$\       $$ |          $$ |\\
+$$ /  $$ | $$$$$$$ | $$$$$$\  $$$$$$$\   $$$$$$\\
+$$$$$$$$ |$$  __$$ |$$  __$$\ $$  __$$\ $$  __$$\\
+$$  __$$ |$$ /  $$ |$$ /  $$ |$$ |  $$ |$$$$$$$$ |\\
+$$ |  $$ |$$ |  $$ |$$ |  $$ |$$ |  $$ |$$   ____|\\
+$$ |  $$ |\$$$$$$$ |\$$$$$$  |$$$$$$$  |\$$$$$$$\\
+\__|  \__| \_______| \______/ \_______/  \_______|
+
+CSV Parser {0} - https://github.com/vossen-adobe/aac-csv-parse
+Danimae Vossen (2020)
+"""
+
+    return banner.format(__version__)
 
 if __name__ == '__main__':
     main()
