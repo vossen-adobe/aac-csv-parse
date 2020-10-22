@@ -199,7 +199,8 @@ def find_recent_csv():
     return filtered[-1][1] if filtered else 'users.csv'
 
 
-@click.group(cls=DefaultGroup, default='sort', default_if_no_args=True)
+@click.group(help='Use to sort a CSV user list from the Adobe Admin Console (https://adminconsole.adobe.com)',
+             cls=DefaultGroup, default='sort', default_if_no_args=True)
 @click.help_option('-h', '--help')
 def main():
     print(welcome())
@@ -216,7 +217,7 @@ class QuestionaryOption(click.Option):
         val = questionary.select(self.prompt, choices=self.type.choices, default='groups').unsafe_ask()
         return val
 
-@main.command(help='')
+@main.command(help='Sort a CSV.  This MUST be a csv downloaded from the Users tab, and nowhere else.')
 @click.option('-p', '--path',
               default=None,
               show_default=True,
