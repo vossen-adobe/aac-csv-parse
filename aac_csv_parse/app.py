@@ -1,9 +1,8 @@
 import csv
+import os
 
-
-def parse_list():
-    pass
-
+import click
+from click_default_group import DefaultGroup
 
 class Category():
     def __init__(self, name, members):
@@ -67,7 +66,7 @@ class User():
     @classmethod
     def fromCSV(cls, fields):
         return cls(
-            fields.get('Identity Type'),
+            fields.get('Identity Type') or fields.get('ï»¿Identity Type'),
             fields.get('Username'),
             fields.get('Domain'),
             fields.get('Email'),
@@ -90,6 +89,8 @@ def read_users(filename):
     with open(filename) as f:
         for u in csv.DictReader(f):
             u = User.fromCSV(u)
+            if u.type != 'federated id':
+                u.email = "{0} ({1})".format(u.email, u.type)
             users[u.email] = u
     return users
 
@@ -100,12 +101,12 @@ def build_sorted_list(category, userlist):
         raise ValueError("Cannot sort by nonexistent property: {}".format(category))
     if not isinstance(getattr(valid, category), set):
         raise ValueError("Cannot categorize by non-list property: {}".format(category))
-
-    cats = {'none': {}}
+    non_cat = 'no {}'.format(category)
+    cats = {non_cat: {}}
     for e, u in userlist.items():
         attr = getattr(u, category)
         if not attr:
-            cats['none'][e] = u
+            cats[non_cat][e] = u
             continue
         for c in attr:
             if c not in cats:
@@ -120,10 +121,11 @@ def build_sorted_list(category, userlist):
 
 def write_to_csv(cats, filename):
     cols = list(cats.keys())
+    cols_ann = ["{0} ({1} users)".format(k, len(cats[k].members)) for k in cats.keys()]
 
     with open(filename, 'w', newline='') as f:
         writer = csv.writer(f, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-        writer.writerow(cols)
+        writer.writerow(cols_ann)
 
         c = 0
         while True:
@@ -135,16 +137,20 @@ def write_to_csv(cats, filename):
                 print(c)
             c += 1
 
-    print()
-
-
+@click.group(cls=DefaultGroup, default='sort', default_if_no_args=True)
+@click.help_option('-h', '--help')
 def main():
-    users = read_users('users.csv')
-    l = build_sorted_list('groups', users)
-    write_to_csv(l, 'users_categorized.csv')
-    print()
+    pass
 
+@main.command(help='')
+@click.option('-p', '--path',default='users.csv', show_default=True)
+def sort(path):
+    filename = path.split(os.sep)[-1]
+    path = os.path.abspath(path)
+    dir = os.path.dirname(path)
+    users = read_users(path)
+    sorted = build_sorted_list('groups', users)
+    write_to_csv(sorted, os.path.join(dir,'processed_{}'.format(filename)))
 
 if __name__ == '__main__':
     main()
-
