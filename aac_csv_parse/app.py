@@ -1,10 +1,13 @@
 import csv
 import os
+import time
 from datetime import datetime
+from stat import S_ISREG, ST_CTIME, ST_MODE
 
 import click
 import questionary
 from click_default_group import DefaultGroup
+
 
 class Category():
     def __init__(self, name, members):
@@ -177,12 +180,29 @@ def write_summary(summary_filename, total_users, outfile, sourcefile, category, 
         f.write('-----------------------------------------\n')
 
 
+def find_recent_csv():
+    # path to the directory (relative or absolute)
+    dirpath = r'.'
+
+    # get all entries in the directory w/ stats
+    entries = (os.path.join(dirpath, fn) for fn in os.listdir(dirpath))
+    entries = ((os.stat(path), path) for path in entries)
+
+    # leave only regular files, insert creation date
+    entries = list((stat[ST_CTIME], path) for stat, path in entries if S_ISREG(stat[ST_MODE]))
+
+    # NOTE: on Windows `ST_CTIME` is a creation date
+    #  but on Unix it could be something else
+    # NOTE: use `ST_MTIME` to sort by a modification date
+    s = [(time.ctime(c[0]), os.path.basename(c[1])) for c in sorted(entries)]
+    filtered = list(filter(lambda n: n[1].lower().startswith('users'), s))
+    return filtered[-1][1] if filtered else 'users.csv'
+
+
 @click.group(cls=DefaultGroup, default='sort', default_if_no_args=True)
 @click.help_option('-h', '--help')
 def main():
     pass
-
-
 
 class QuestionaryOption(click.Option):
 
@@ -206,8 +226,9 @@ class QuestionaryOption(click.Option):
               type=click.Choice(User.sortable_fields, case_sensitive=False), cls=QuestionaryOption)
 def sort(path, category):
     if path is None:
+
         path = click.prompt('Target CSV file',
-                            default='users.csv',
+                            default=find_recent_csv(),
                             show_default=True,
                             type=click.Path(exists=True))
 
