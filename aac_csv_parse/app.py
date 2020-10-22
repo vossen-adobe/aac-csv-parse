@@ -1,8 +1,10 @@
 import csv
 import os
+from datetime import datetime
 
 import click
 from click_default_group import DefaultGroup
+
 
 class Category():
     def __init__(self, name, members):
@@ -17,8 +19,21 @@ class Category():
         else:
             return ""
 
+    def size(self):
+        return len(self.members)
+
 
 class User():
+    sortable_fields = [
+        'product_profs',
+        'admin_roles',
+        'products_profs_administered',
+        'groups',
+        'groups_administered',
+        'products_administered',
+        'developer_access',
+        'auto_assigned_products'
+    ]
 
     def __init__(self,
                  type=None,
@@ -95,15 +110,13 @@ def read_users(filename):
     return users
 
 
-def build_sorted_list(category, userlist):
-    valid = User(email='xx')
-    if not hasattr(valid, category):
-        raise ValueError("Cannot sort by nonexistent property: {}".format(category))
-    if not isinstance(getattr(valid, category), set):
+def build_sorted_list(category, user_list):
+    if category not in User.sortable_fields:
         raise ValueError("Cannot categorize by non-list property: {}".format(category))
+
     non_cat = 'no {}'.format(category)
     cats = {non_cat: {}}
-    for e, u in userlist.items():
+    for e, u in user_list.items():
         attr = getattr(u, category)
         if not attr:
             cats[non_cat][e] = u
@@ -119,38 +132,84 @@ def build_sorted_list(category, userlist):
     return {key: Category(key, value) for key, value in sorted(sorted_cats.items())}
 
 
-def write_to_csv(cats, filename):
+def write_to_csv(cats, data_filename):
     cols = list(cats.keys())
-    cols_ann = ["{0} ({1} users)".format(k, len(cats[k].members)) for k in cats.keys()]
+    cols_ann = ["{0} ({1} users)".format(k, cats[k].size()) for k in cats.keys()]
+    max_rows = max([cats[k].size() for k in cats.keys()])
 
-    with open(filename, 'w', newline='') as f:
+    with open(data_filename, 'w', newline='') as f:
         writer = csv.writer(f, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
         writer.writerow(cols_ann)
 
         c = 0
         while True:
             row = [cats[c].pull_next() for c in cols]
+            if c % 1000 == 0 or len(set(row)) == 1:
+                print("{0} / {1} ({2} %)".format(c, max_rows, round(100 * (c / max_rows), 2)))
+            c += 1
             if len(set(row)) == 1:
                 break
             writer.writerow(row)
-            if c % 1000 == 0:
-                print(c)
-            c += 1
+
+    return cols_ann
+
+
+def write_summary(summary_filename, category_counts, total_users, outfile, sourcefile, category):
+    with open(summary_filename, 'w') as f:
+        f.write('Completed on: {}\n'.format(datetime.now().isoformat().replace('T', ' ')))
+        f.write('Parsed CSV: {}\n'.format(sourcefile))
+        f.write('Sort category: {}'.format(category))
+        f.write('Wrote full data to: {}\n'.format(outfile))
+        f.write('Total users: {}\n'.format(total_users))
+        f.write('\nPer category counts: \n')
+        f.write('-----------------------------------------\n')
+        for r in category_counts:
+            f.write(r + '\n')
+        f.write('-----------------------------------------\n')
+
 
 @click.group(cls=DefaultGroup, default='sort', default_if_no_args=True)
 @click.help_option('-h', '--help')
 def main():
     pass
 
+
 @main.command(help='')
-@click.option('-p', '--path',default='users.csv', show_default=True)
-def sort(path):
+@click.option('-p', '--path',
+              default=None,
+              show_default=True,
+              type=click.Path(exists=True))
+@click.option('-c', '--category',
+              default='groups',
+              type=click.Choice(User.sortable_fields, case_sensitive=False))
+def sort(path, category):
+    if path is None:
+        path = click.prompt('Target CSV file',
+                            default='users.csv',
+                            show_default=True,
+                            type=click.Path(exists=True))
+
     filename = path.split(os.sep)[-1]
     path = os.path.abspath(path)
     dir = os.path.dirname(path)
+    data_output = os.path.join(dir, 'processed_{}'.format(filename))
+    summary_output = os.path.join(dir, 'summary_{}'.format(filename))
+    category = category.lower()
+
+    print('Reading users: {}'.format(path))
     users = read_users(path)
-    sorted = build_sorted_list('groups', users)
-    write_to_csv(sorted, os.path.join(dir,'processed_{}'.format(filename)))
+    print('Total user records: {}'.format(len(users)))
+
+    print("Assemble sorted dictionary by '{}'...".format(category))
+    sorted = build_sorted_list(category, users)
+
+    print('Write results to {}'.format(data_output))
+    summary = write_to_csv(sorted, data_output)
+
+    print('Write summary to {}'.format(summary_output))
+    write_summary(summary_output, summary, len(users), data_output, path, category)
+    print('-----------------------------------------')
+
 
 if __name__ == '__main__':
     main()
