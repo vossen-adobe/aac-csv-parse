@@ -62,9 +62,9 @@ class User():
         self.givenname = self.lower(givenname)
         self.surname = self.lower(surname)
         self.country = self.lower(country)
-        self.product_profs = self.get_set(product_profiles)
+        self.product_profiles = self.get_set(product_profiles)
         self.admin_roles = self.get_set(admin_roles)
-        self.products_profs_administered = self.get_set(product_profiles_administered)
+        self.products_profiles_administered = self.get_set(product_profiles_administered)
         self.groups = self.get_set(groups)
         self.groups_administered = self.get_set(groups_administered)
         self.products_administered = self.get_set(products_administered)
@@ -159,9 +159,26 @@ def write_to_csv(cats, data_filename):
                 break
             writer.writerow(row)
 
+def write_four_col(cats, data_filename):
+
+    cols = ['Object Name', 'Email', 'First Name', 'Last Name']
+
+    with open(data_filename, 'w', newline='') as f:
+        writer = csv.writer(f, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+        writer.writerow(cols)
+
+        for name,k in cats.items():
+            for member,j in k.members.items():
+                row = [name, member, j.givenname, j.surname]
+                writer.writerow(row)
+
 def write_summary(summary_filename, total_users, outfile, sourcefile, category, sorted_dict):
     non_cat = 'no {}'.format(category)
     with open(summary_filename, 'w') as f:
+        def print_write(line):
+            print(line)
+            f.write(line + '\n')
+
         f.write('CSV analysis results:\n')
         f.write('-----------------------------------------\n')
         f.write('Completed on: {}\n'.format(datetime.now().strftime('%Y-%m-%d %H.%M.%S')))
@@ -171,13 +188,13 @@ def write_summary(summary_filename, total_users, outfile, sourcefile, category, 
         f.write('Total users: {}\n'.format(total_users))
         f.write('Total users in {0}: {1}\n'.format(category, total_users - sorted_dict[non_cat].initial_count))
         f.write('Total without any {0}: {1}\n'.format(category, sorted_dict[non_cat].initial_count))
-        f.write('\nPer {} counts: \n'.format(category))
-        f.write('-----------------------------------------\n')
-        f.write('# Users | Name\n')
-        f.write('-----------------------------------------\n')
+        print_write('\nPer {} counts: '.format(category))
+        print_write('-----------------------------------------')
+        print_write('# Users | Name')
+        print_write('-----------------------------------------')
         for r, v in sorted_dict.items():
-            f.write('{:<10}{}\n'.format(v.initial_count, r))
-        f.write('-----------------------------------------\n')
+            print_write('{:<10}{}'.format(v.initial_count, r))
+        f.write('-----------------------------------------')
 
 
 def find_recent_csv():
@@ -195,7 +212,7 @@ def find_recent_csv():
     #  but on Unix it could be something else
     # NOTE: use `ST_MTIME` to sort by a modification date
     s = [(time.ctime(c[0]), os.path.basename(c[1])) for c in sorted(entries)]
-    filtered = list(filter(lambda n: n[1].lower().startswith('users'), s))
+    filtered = list(filter(lambda n: n[1].lstrip("\\./").lower().startswith('users'), s))
     return filtered[-1][1] if filtered else 'users.csv'
 
 
@@ -217,6 +234,17 @@ class QuestionaryOption(click.Option):
         val = questionary.select(self.prompt, choices=self.type.choices, default='groups').unsafe_ask()
         return val
 
+class QuestionaryFormatOption(click.Option):
+
+    def __init__(self, param_decls=None, **attrs):
+        click.Option.__init__(self, param_decls, **attrs)
+        if not isinstance(self.type, click.Choice):
+            raise Exception('ChoiceOption type arg must be click.Choice')
+
+    def prompt_for_value(self, ctx):
+        val = questionary.select(self.prompt, choices=self.type.choices, default='table').unsafe_ask()
+        return val
+
 @main.command(help='Sort a CSV.  This MUST be a csv downloaded from the Users tab, and nowhere else.')
 @click.option('-p', '--path',
               default=None,
@@ -226,7 +254,11 @@ class QuestionaryOption(click.Option):
               prompt='Sort by which category: ',
               default='groups',
               type=click.Choice(User.sortable_fields, case_sensitive=False), cls=QuestionaryOption)
-def sort(path, category):
+@click.option('-f', '--format',
+              prompt='How do you want results formatted? ',
+              default='table',
+              type=click.Choice(['table','4column'], case_sensitive=False), cls=QuestionaryFormatOption)
+def sort(path, category, format):
     if path is None:
         path = click.prompt('Target CSV file',
                             default=find_recent_csv(),
@@ -249,7 +281,10 @@ def sort(path, category):
     sorted = build_sorted_list(category, users)
 
     print('Process results to {}'.format(data_output))
-    write_to_csv(sorted, data_output)
+    if format == '4column':
+        write_four_col(sorted, data_output)
+    else:
+        write_to_csv(sorted, data_output)
 
     print('Write summary to {}'.format(summary_output))
     write_summary(summary_output, len(users), data_output, path, category, sorted)
