@@ -43,7 +43,7 @@ If you do not a category on the command line, you will be prompted to select a c
 
 Prompt:
 
-![prompt](images\intro.jpg)
+![prompt](images/intro.jpg)
 
 If you do not supply a path, a suggestion will be made based on the files in the current directory.  If the suggestion is not what you want, just enter the path to your users CSV file.
 
@@ -53,8 +53,8 @@ The processed file will be a CSV, where the header indicates each category, and 
 
 Example output:
 
-![output](images\output.jpg)
+![output](images/output.jpg)
 
 Example summary:
 
-![summary](images\summary.jpg)
+![summary](images/summary.jpg)
